@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const pool = require('../config/database');
 const { buscarPorId, buscarPorCorreo } = require('../repositories/usuariosRepository');
 
 async function verificarToken(req, res, next) {
@@ -24,7 +25,7 @@ async function verificarToken(req, res, next) {
       return res.status(401).json({ mensaje: 'Sesión antigua o inválida. Inicia sesión de nuevo.' });
     }
 
-    // Token nativo de Hospital (incluye versión de sesión)
+    // 1. Token nativo de Hospital (incluye versión de sesión)
     if (Number.isInteger(datos.ver)) {
       const actual = await buscarPorId(datos.id);
       if (!actual || actual.rol !== datos.rol || actual.sesion_version !== datos.ver) {
@@ -34,10 +35,21 @@ async function verificarToken(req, res, next) {
       return next();
     }
 
-    // Token compartido (SSO) emitido por otro módulo de la Red de Atención Ciudadana
-    const actual = datos.correo
-      ? await buscarPorCorreo(datos.correo)
-      : await buscarPorId(datos.id);
+    // 2. Token compartido (SSO) emitido por otro módulo de la Red
+    let actual = datos.correo ? await buscarPorCorreo(datos.correo) : null;
+
+    if (!actual) {
+      const central = await pool.query(
+        `SELECT h.id, h.nombre, h.correo, COALESCE(ur.rol, h.rol) AS rol, h.turno, h.sesion_version
+         FROM public.usuarios u
+         JOIN public.usuario_rol ur ON ur.usuario_id = u.id AND ur.modulo = 'hospital'
+         JOIN hospital.usuarios h ON LOWER(h.correo) = LOWER(u.correo)
+         WHERE u.id = $1
+         LIMIT 1`,
+        [datos.id]
+      );
+      actual = central.rows[0] || null;
+    }
 
     if (!actual) {
       return res.status(401).json({ mensaje: 'Usuario no registrado en Hospital.' });
