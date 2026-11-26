@@ -40,9 +40,8 @@ async function verificarToken(req, res, next) {
 
     if (!actual) {
       const central = await pool.query(
-        `SELECT h.id, h.nombre, h.correo, COALESCE(ur.rol, h.rol) AS rol, h.turno, h.sesion_version
+        `SELECT h.id, h.nombre, h.correo, h.rol, h.turno, h.sesion_version
          FROM public.usuarios u
-         JOIN public.usuario_rol ur ON ur.usuario_id = u.id AND ur.modulo = 'hospital'
          JOIN hospital.usuarios h ON LOWER(h.correo) = LOWER(u.correo)
          WHERE u.id = $1
          LIMIT 1`,
