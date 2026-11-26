@@ -1,0 +1,1 @@
+const router=require('express').Router(),c=require('../controllers/pagosController'),{verificarToken,permitirRoles}=require('../middlewares/authMiddleware');router.use(verificarToken);router.post('/pasarela',permitirRoles('cliente'),c.gateway);router.get('/comprobante/:op',permitirRoles('cliente','administrador','empleado','cajero'),c.receipt);module.exports=router;

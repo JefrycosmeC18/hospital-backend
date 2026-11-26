@@ -1,0 +1,11 @@
+const r=require('../repositories/citasRepository');
+const {transaction,audit}=require('../repositories/commonRepository');
+const v=require('./rules');
+const own=(c,u)=>{if(!c||String(c.id_usuario)!==String(u.id))v.fail(404,'Cita no encontrada');return c;};
+async function listarCitas(){return r.listarCitas();}
+async function mias(u){return r.mias(u.id);}
+async function detail(u,id){return own(await r.find(v.id(id)),u);}
+async function create(u,b,presencial){if(presencial)v.shift(u);const d=v.cita(b,{nueva:true});let extra={};if(!presencial){const nacimiento=v.date(b.fecha_nacimiento);if(nacimiento>v.today())v.fail(400,'Fecha de nacimiento inválida');const telefono=String(b.telefono??'');if(!/^\d{9}$/.test(telefono))v.fail(400,'Teléfono inválido');extra={fecha_nacimiento:nacimiento,telefono,correo:b.correo?v.email(b.correo):null,motivo:v.text(b.motivo,1,1000,'Motivo')};}return transaction(async db=>{const c=await r.insert(db,presencial?null:u.id,d,v.tarifa(d.especialidad,d.tiene_sis),v.code('COD'),extra);await audit(db,u,'crear','cita',c.id);return c;});}
+async function edit(u,id,b,gestion){id=v.id(id);if(gestion)v.shift(u);const d=v.cita(b,{gestion});return transaction(async db=>{const c=await r.find(id,db,true);if(gestion){if(!c)v.fail(404,'Cita no encontrada');d.tiene_sis=c.tiene_sis;d.estado=b.estado;if(c.estado_pago==='pagado'&&d.especialidad!==c.especialidad)v.fail(409,'No puedes cambiar la especialidad de una cita pagada');}else{own(c,u);if(c.estado!=='registrado'||c.estado_pago==='pagado')v.fail(409,'Cita no editable');d.estado=c.estado;}const t=c.estado_pago==='pagado'?{tipo:c.tipo_consulta,monto:c.monto_calculado,estado:c.estado_pago}:v.tarifa(d.especialidad,d.tiene_sis);const result=await r.update(db,id,d,t);await audit(db,u,'actualizar','cita',id);return result;});}
+async function remove(u,id){v.shift(u);id=v.id(id);return transaction(async db=>{const c=await r.find(id,db,true);if(!c)v.fail(404,'Cita no encontrada');if(c.estado_pago==='pagado'||await r.hasPayments(db,id))v.fail(409,'Cita con historial de pagos; no se puede eliminar');await r.remove(db,id);await audit(db,u,'eliminar','cita',id);});}
+module.exports={listarCitas,mias,detail,create,edit,remove};

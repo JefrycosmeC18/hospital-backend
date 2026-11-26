@@ -1,0 +1,12 @@
+const router=require('express').Router(), c=require('../controllers/citasController'),{verificarToken,permitirRoles}=require('../middlewares/authMiddleware');
+const staff=permitirRoles('administrador','empleado'),client=permitirRoles('cliente');
+router.use(verificarToken);
+router.get('/',staff,c.listarCitas);
+router.get('/mias',client,c.mias);
+router.post('/presenciales',staff,c.create(true));
+router.post('/',client,c.create(false));
+router.get('/:id',client,c.detail);
+router.patch('/:id',client,c.edit(false));
+router.patch('/:id/gestion',staff,c.edit(true));
+router.delete('/:id/gestion',staff,c.remove);
+module.exports=router;
