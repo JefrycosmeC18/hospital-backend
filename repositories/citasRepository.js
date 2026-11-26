@@ -5,6 +5,7 @@ async function mias(uid){return (await pool.query(`SELECT ${fields}, (SELECT p.c
 async function find(id,db=pool,lock=false){return (await db.query(`SELECT ${fields} FROM citas_medicas r WHERE r.id=$1${lock?' FOR UPDATE':''}`,[id])).rows[0];}
 async function insert(db,uid,d,t,code,extra){return (await db.query(`INSERT INTO citas_medicas (id_usuario,codigo_seguimiento,nombre_paciente,dni,especialidad,fecha_preferida,tipo_consulta,tiene_sis,monto_calculado,estado_pago,estado,datos_solicitud) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'registrado',$11) RETURNING id,codigo_seguimiento,estado,monto_calculado,estado_pago`,[uid,code,d.nombre_paciente,d.dni,d.especialidad,d.fecha_preferida,t.tipo,d.tiene_sis,t.monto,t.estado,JSON.stringify(extra)])).rows[0];}
 async function update(db,id,d,t){await db.query(`UPDATE citas_medicas SET nombre_paciente=$2,dni=$3,especialidad=$4,fecha_preferida=$5,estado=$6,tipo_consulta=$7,tiene_sis=$8,monto_calculado=$9,estado_pago=$10 WHERE id=$1`,[id,d.nombre_paciente,d.dni,d.especialidad,d.fecha_preferida,d.estado,t.tipo,d.tiene_sis,t.monto,t.estado]);return find(id,db);}
+async function setEstado(db,id,estado){await db.query('UPDATE citas_medicas SET estado=$2 WHERE id=$1',[id,estado]);return find(id,db);}
 async function hasPayments(db,id){return (await db.query('SELECT 1 FROM pagos WHERE id_registro=$1 LIMIT 1',[id])).rowCount>0;}
 async function remove(db,id){await db.query('DELETE FROM citas_medicas WHERE id=$1',[id]);}
-module.exports={listarCitas,mias,find,insert,update,hasPayments,remove};
+module.exports={listarCitas,mias,find,insert,update,setEstado,hasPayments,remove};
