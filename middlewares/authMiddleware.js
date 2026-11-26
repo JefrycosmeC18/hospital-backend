@@ -66,7 +66,7 @@ async function verificarToken(req, res, next) {
     if (!actual) {
       const central = await pool.query(
         `SELECT id, nombre, correo, rol, turno, sesion_version
-         FROM public.usuarios
+         FROM usuarios
          WHERE id = $1
          LIMIT 1`,
         [datos.id]
