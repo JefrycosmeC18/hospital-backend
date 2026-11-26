@@ -2,6 +2,31 @@ const jwt = require('jsonwebtoken');
 const pool = require('../config/database');
 const { buscarPorId, buscarPorCorreo } = require('../repositories/usuariosRepository');
 
+// Normaliza el rol: sin tildes, minusculas y con alias conocidos.
+const ALIAS_ROLES = {
+  admin: 'administrador',
+  administrator: 'administrador',
+  admin_hospital: 'administrador',
+  administrador_hospital: 'administrador',
+  hospital_admin: 'administrador',
+  hospital_administrador: 'administrador',
+  cajera: 'cajero',
+  user: 'cliente',
+  usuario: 'cliente',
+  ciudadano: 'cliente',
+  ciudadana: 'cliente'
+};
+
+function normalizarRol(rol) {
+  const limpio = String(rol ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+  return ALIAS_ROLES[limpio] || limpio;
+}
+
 async function verificarToken(req, res, next) {
   const autorizacion = req.headers.authorization;
 
@@ -31,7 +56,7 @@ async function verificarToken(req, res, next) {
       if (!actual || actual.rol !== datos.rol || actual.sesion_version !== datos.ver) {
         return res.status(401).json({ mensaje: 'Sesión invalidada. Inicia sesión de nuevo.' });
       }
-      req.usuario = actual;
+      req.usuario = { ...actual, rol_bd: actual.rol, rol: normalizarRol(actual.rol) };
       return next();
     }
 
@@ -53,7 +78,7 @@ async function verificarToken(req, res, next) {
       return res.status(401).json({ mensaje: 'Usuario no registrado en Hospital.' });
     }
 
-    req.usuario = actual;
+    req.usuario = { ...actual, rol_bd: actual.rol, rol: normalizarRol(actual.rol) };
     next();
   } catch (error) {
     if (!['JsonWebTokenError', 'TokenExpiredError', 'NotBeforeError'].includes(error.name)) return next(error);
@@ -74,10 +99,19 @@ function permitirRoles(...rolesPermitidos) {
     }
 
     if (!rolesPermitidos.includes(req.usuario.rol)) {
-      return res.status(403).json({
-        exito: false,
-        mensaje: 'No tienes permisos para esta operacion'
-      });
+      // Este log aparece en Render > Logs y dice POR QUE se rechazo.
+      console.warn(
+        '[403 permisos]', req.method, req.originalUrl,
+        '| usuario id=' + req.usuario.id,
+        '| rol en BD=' + JSON.stringify(req.usuario.rol_bd ?? req.usuario.rol),
+        '| rol normalizado=' + JSON.stringify(req.usuario.rol),
+        '| permitidos=' + JSON.stringify(rolesPermitidos)
+      );
+      const respuesta = { exito: false, mensaje: 'No tienes permisos para esta operacion' };
+      if (process.env.DEBUG_AUTH === 'true') {
+        respuesta.debug = { rol_bd: req.usuario.rol_bd ?? req.usuario.rol, rol: req.usuario.rol, permitidos: rolesPermitidos };
+      }
+      return res.status(403).json(respuesta);
     }
 
     next();
@@ -86,5 +120,6 @@ function permitirRoles(...rolesPermitidos) {
 
 module.exports = {
   verificarToken,
-  permitirRoles
+  permitirRoles,
+  normalizarRol
 };
